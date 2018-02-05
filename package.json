@@ -1,0 +1,30 @@
+{
+  "name": "supersaas-nodjs-sdk",
+  "version": "0.1.0",
+  "description": "Online bookings/appointments/calendars using the SuperSaaS scheduling platform.",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "./node_modules/mocha/bin/mocha --recursive"
+  },
+  "files": [
+    "src/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:TertiumQuid/supersaas-nodejs-sdk.git"
+  },
+  "author": "Travis Dunn",
+  "license": "MIT",
+  "keywords": [
+    "online appointment schedule", "booking calendar", "appointment book", "reservation system",
+    "scheduling software", "online booking system", "scheduling system"
+  ],
+  "bugs": {
+    "url": "https://github.com/TertiumQuid/supersaas-nodejs-sdk/issues"
+  },
+  "homepage": "https://supersaas.com",
+  "dependencies": {
+  },
+  "devDependencies": {
+  }
+}
