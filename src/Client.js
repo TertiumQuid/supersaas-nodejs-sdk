@@ -5,27 +5,45 @@
   const querystring = require('querystring');
   const Appointments = require("./api/Appointments");
   const Forms = require("./api/Forms");
+  const Schedules = require("./api/Schedules");
   const Users = require("./api/Users");
 
   var DEFAULT_HOST = 'http://localhost:3000';
 
   var Client = function Client(configuration) {
     this.accountName = configuration.accountName;
-    this.userName = configuration.userName;
     this.password = configuration.password;
-    this.host = configuration.host;
-    this.test = configuration.test;
+    this.host = configuration.host || DEFAULT_HOST;
+    this.dryRun = configuration.dryRun;
+    this.verbose = configuration.verbose;
 
-    this.last_request = null;
+    this.lastRequest = null;
 
     this.appointments = new Appointments(this);
     this.forms = new Forms(this);
+    this.schedules = new Schedules(this);
     this.users = new Users(this);
   }
   Client.API_VERSION = '1';
-  Client.VERSION = '0.1.0';
+  Client.VERSION = '1.0.0';
 
-  Client.prototype.request = function(httpMethod, path, params, query) {
+  Client.prototype.get = function(path, query, callback) {
+    return this.request('GET', path, null, query, callback);
+  }
+
+  Client.prototype.post = function(path, params, query, callback) {
+    return this.request('POST', path, params, query, callback);
+  }
+
+  Client.prototype.put = function(path, params, query, callback) {
+    return this.request('PUT', path, params, query, callback);
+  }
+
+  Client.prototype.delete = function(path, params, query, callback) {
+    return this.request('DELETE', path, params, query, callback);
+  }
+
+  Client.prototype.request = function(httpMethod, path, params, query, callback) {
     params = params || {};
     query = query || {};
     if (!this.accountName) {
@@ -46,24 +64,86 @@
       throw new Error("Invalid HTTP Method: " + httpMethod + ". Only `GET`, `POST`, `PUT`, `DELETE` supported.");
     }
 
-    var parsedUrl = this.host + "/" + this.path;
+    var parsedUrl = this.host + "/api" + path + ".json";
     if (query) {
-      parsedUrl += "?"  + querystring.stringify(query);
+      var parsedQuery = this._parseParams(query)
+      var qs = querystring.stringify(parsedQuery)
+      parsedUrl += qs ? ("?" + qs) : '';
     }
     parsedUrl = url.parse(parsedUrl);
+
+    var parsedParams = this._parseParams(params)
+
     var options = {
       method: httpMethod,
-      hostname: parsedUrl.host,
+      hostname: parsedUrl.hostname,
       port: parsedUrl.port,
-      path: path,
+      path: parsedUrl.path,
       headers: headers
     };
-    var req = this._requestModule(parsedUrl).request(options, function(res) {
-    })
 
-    if (this.test) {
+
+    if (this.dryRun) {
+      this.lastRequest = options;
+      if (callback) {
+        callback(null, [])
+      }
       return {};
     }
+
+
+    var req = this._requestModule(parsedUrl).request(options);
+    var verboseLogging = this.verbose;
+    req.on("response", function(res) {
+      res.setEncoding('utf8');
+      var body = "";
+
+      res.on("data", function(data) {
+        return body += data.toString();
+      });
+      return res.on("end", function() {
+        if (verboseLogging) {
+          console.log("Response:");
+          console.log(body);
+          console.log("==============================");
+        }
+
+        if (callback) {
+          try {
+            var obj = body && body.length ? JSON.parse(body) : "";
+            if (obj.errors) {
+              callback(obj);
+            } else {
+              callback(null, obj);
+            }
+          } catch (e) {
+            callback({errors: [{title: e.message}]});
+          }
+        }
+      });
+    })
+    req.on('error', function(e) {
+      console.log('ERRRRRRRR',e)
+      if (callback) {
+        callback(e)
+      }
+    });
+
+    if (verboseLogging) {
+      console.log("### SuperSaaS Client Request:");
+      console.log(httpMethod + " " + parsedUrl.host + parsedUrl.path);
+      console.log(params);
+      console.log("------------------------------");
+    }
+
+    var hasParamData = Object.keys(parsedParams).length > 0;
+    if (hasParamData) {
+      var paramData = JSON.stringify(parsedParams);
+      req.write(paramData, 'utf8');
+    }
+
+    this.lastRequest = req;
+    return req.end();
   }
   Client.prototype._requestModule = function(url) {
     return url.protocol === 'https' ? https : http
@@ -71,13 +151,22 @@
   Client.prototype._userAgent = function() {
     return "SSS/" + Client.VERSION + " Node/" + process.version + " API/" + Client.API_VERSION;
   }
+  Client.prototype._parseParams = function(params) {
+    var parsed = {}
+    Object.keys(params).forEach(function (key) {
+      if (params[key] !== null && params[key] !== '') {
+        parsed[key] = params[key]
+      }
+    })
+    return parsed
+  }
 
   var config = {
-    accountName: process.env['SSS_SDK_ACCOUNT_NAME'],
-    userName: process.env['SSS_SDK_USER_NAME'],
-    password: process.env['SSS_SDK_PASSWORD'],
+    accountName: process.env['SSS_API_ACCOUNT_NAME'],
+    password: process.env['SSS_API_PASSWORD'],
     host: DEFAULT_HOST,
-    test: false
+    dryRun: false,
+    verbose: false
   }
   Client.Instance = new Client(config);
   Client.configure = function (configuration) {
